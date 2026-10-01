@@ -1,0 +1,5 @@
+{
+    "model": "deepseek-flash",
+    "temperature": 1.3,
+    "system_prompt": "你是一个简洁的助手，回答不超过三句话。"
+}
