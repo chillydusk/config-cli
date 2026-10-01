@@ -1,6 +1,10 @@
 import json
+import os
+import sys
 from pathlib import Path
 
+from dotenv import load_dotenv
+from openai import OpenAI
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 
@@ -32,13 +36,56 @@ def load_config() -> LlmConfig | None:
         return None
 
 
+def get_api_key() -> str:
+    load_dotenv()  # 从 .env 文件加载环境变量
+    api_key = os.getenv("DEEPSEEK_API_KEY")
+    if not api_key:
+        raise SystemExit("没找到 DEEPSEEK_API_KEY，检查 .env 文件")
+    return api_key
+
+
+def ask_model(question: str, config: LlmConfig) -> str:
+    client = OpenAI(
+        api_key=get_api_key(),
+        base_url="https://api.deepseek.com",
+    )
+
+    resp = client.chat.completions.create(
+        model=config.model,  # ← 映射表
+        messages=[
+            {"role": "system", "content": config.system_prompt},
+            {"role": "user", "content": question},
+        ],
+        temperature=config.temperature,  # ← 映射表
+        max_tokens=config.max_tokens,  # ← 映射表
+    )
+    return resp.choices[0].message.content
+
+
 def main() -> None:
     config = load_config()
     if config is None:
         raise SystemExit(1)  # 退出码 != 0：告诉外面"这次运行失败了"
+    args = sys.argv[1:]
 
-    print("当前配置：")
-    print(f"  model         = {config.model}")
-    print(f"  temperature   = {config.temperature}")
-    print(f"  max_tokens    = {config.max_tokens}")
-    print(f"  system_prompt = {config.system_prompt}")
+    if not args:
+        print("当前配置：")
+        print(f"  model         = {config.model}")
+        print(f"  temperature   = {config.temperature}")
+        print(f"  max_tokens    = {config.max_tokens}")
+        print(f"  system_prompt = {config.system_prompt}")
+    elif args[0] == "ask":
+        question = " ".join(args[1:])
+        if not question:
+            print("请提供一个问题。")
+            print("用法：config-cli ask '你的问题'")
+            raise SystemExit(1)  # 退出码 != 0：告诉外面"这次运行失败了"
+        # api_key = get_api_key()
+        # print(f"API key 已读取（{len(api_key)} 个字符）")API key读取检验
+        print(f"你问：{question}")
+        answer = ask_model(question, config)
+        print(f"回答：{answer}")
+    else:
+        print(f"未知命令: {args[0]}")
+        print("用法：config-cli ask '你的问题'")
+        raise SystemExit(1)
