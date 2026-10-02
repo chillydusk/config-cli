@@ -6,6 +6,8 @@ dist/
 wheels/
 *.egg-info
 
+# 运行数据
+*.log
 # Virtual environments
 .venv
 # Secrets
