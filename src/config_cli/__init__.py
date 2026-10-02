@@ -3,6 +3,7 @@ import os
 import sys
 from pathlib import Path
 
+import openai
 from dotenv import load_dotenv
 from openai import OpenAI
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
@@ -83,7 +84,17 @@ def main() -> None:
         # api_key = get_api_key()
         # print(f"API key 已读取（{len(api_key)} 个字符）")API key读取检验
         print(f"你问：{question}")
-        answer = ask_model(question, config)
+        try:
+            answer = ask_model(question, config)
+        except openai.AuthenticationError:
+            print("API key 验证失败，请检查 DEEPSEEK_API_KEY 是否正确。")
+            raise SystemExit(1)
+        except openai.APIConnectionError:
+            print("无法连接到 API，请检查网络连接。")
+            raise SystemExit(1)
+        except openai.APIStatusError as e:
+            print(f"API 返回错误状态码 {e.status_code}.")
+            raise SystemExit(1)
         print(f"回答：{answer}")
     else:
         print(f"未知命令: {args[0]}")
