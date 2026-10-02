@@ -18,6 +18,10 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+class AskError(Exception):
+    """问模型失败（网络 / 鉴权 / API 拒绝）—— 消息已写成人话，可直接展示给用户。"""
+
+
 class LlmConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -40,7 +44,9 @@ def load_config() -> LlmConfig | None:
         return LlmConfig.model_validate(json.loads(text))
     except ValidationError as e:
         for err in e.errors():
-            print(err["loc"][0], "→", err["msg"])
+            location = err["loc"][0] if err["loc"] else "整体"
+            logger.error("配置文件验证失败: %s → %s", location, err["msg"])
+            print(location, "→", err["msg"])
         return None
     except json.JSONDecodeError as e:
         logger.error("JSON 解码错误: %s (第 %d 行, 第 %d 列)", e.msg, e.lineno, e.colno)
@@ -61,16 +67,25 @@ def ask_model(question: str, config: LlmConfig) -> str:
         api_key=get_api_key(),
         base_url="https://api.deepseek.com",
     )
-
-    resp = client.chat.completions.create(
-        model=config.model,  # ← 映射表
-        messages=[
-            {"role": "system", "content": config.system_prompt},
-            {"role": "user", "content": question},
-        ],
-        temperature=config.temperature,  # ← 映射表
-        max_tokens=config.max_tokens,  # ← 映射表
-    )
+    try:
+        resp = client.chat.completions.create(
+            model=config.model,  # ← 映射表
+            messages=[
+                {"role": "system", "content": config.system_prompt},
+                {"role": "user", "content": question},
+            ],
+            temperature=config.temperature,  # ← 映射表
+            max_tokens=config.max_tokens,  # ← 映射表
+        )
+    except openai.AuthenticationError:
+        logger.exception("API key 验证失败")
+        raise AskError("API key 验证失败，请检查 DEEPSEEK_API_KEY 是否正确。") from None
+    except openai.APIConnectionError:
+        logger.exception("无法连接到 API")
+        raise AskError("无法连接到 API，请检查网络连接。") from None
+    except openai.APIStatusError as e:
+        logger.exception("API 返回错误状态码 %s", e.status_code)
+        raise AskError(f"API 返回错误状态码 {e.status_code}.") from None
     return resp.choices[0].message.content
 
 
@@ -98,17 +113,8 @@ def main() -> None:
         logger.info("ask:model=%s, question=%s", config.model, question)
         try:
             answer = ask_model(question, config)
-        except openai.AuthenticationError:
-            logger.exception("API key 验证失败")
-            print("API key 验证失败，请检查 DEEPSEEK_API_KEY 是否正确。")
-            raise SystemExit(1)
-        except openai.APIConnectionError:
-            logger.exception("无法连接到 API")
-            print("无法连接到 API，请检查网络连接。")
-            raise SystemExit(1)
-        except openai.APIStatusError as e:
-            logger.exception("API 返回错误状态码 %s", e.status_code)
-            print(f"API 返回错误状态码 {e.status_code}.")
+        except AskError as e:
+            print(e)
             raise SystemExit(1)
         print(f"回答：{answer}")
     else:
