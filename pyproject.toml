@@ -1,7 +1,7 @@
 [project]
 name = "config-cli"
 version = "0.1.0"
-description = "Add your description here"
+description = "配置文件驱动的 DeepSeek 命令行助手"
 readme = "README.md"
 authors = [
     { name = "chillydusk", email = "mjh050728@163.com" }
