@@ -126,7 +126,7 @@ def main() -> None:
         question = " ".join(rest)
         if not question:
             print("请提供一个问题。")
-            print("用法：config-cli ask '你的问题'")
+            print(USAGE)
             raise SystemExit(1)  # 退出码 != 0：告诉外面"这次运行失败了"
         # api_key = get_api_key()
         # print(f"API key 已读取（{len(api_key)} 个字符）")API key读取检验
