@@ -32,6 +32,10 @@ class LlmConfig(BaseModel):
 
 
 CONFIG_FILE = Path("config.json")
+USAGE = """用法：
+  config-cli ask "你的问题"                   提问
+  config-cli ask --model <模型名> "你的问题"   临时指定模型提问
+  config-cli config show                      查看当前生效的配置"""
 
 
 def load_config() -> LlmConfig | None:
@@ -89,20 +93,37 @@ def ask_model(question: str, config: LlmConfig) -> str:
     return resp.choices[0].message.content
 
 
+def show_config(config: LlmConfig) -> None:
+    # 就是原来那 5 行 print（一模一样），放在 main 上面
+    print("当前配置：")
+    print(f"  model         = {config.model}")
+    print(f"  temperature   = {config.temperature}")
+    print(f"  max_tokens    = {config.max_tokens}")
+    print(f"  system_prompt = {config.system_prompt}")
+
+
 def main() -> None:
     config = load_config()
     if config is None:
         raise SystemExit(1)  # 退出码 != 0：告诉外面"这次运行失败了"
     args = sys.argv[1:]
-
     if not args:
-        print("当前配置：")
-        print(f"  model         = {config.model}")
-        print(f"  temperature   = {config.temperature}")
-        print(f"  max_tokens    = {config.max_tokens}")
-        print(f"  system_prompt = {config.system_prompt}")
+        show_config(config)
+    elif args[0] == "config":
+        if len(args) > 1 and args[1] == "show":
+            show_config(config)
+        else:
+            print(USAGE)
+            raise SystemExit(1)  # 退出码 != 0：告诉外面"这次运行失败了"
     elif args[0] == "ask":
-        question = " ".join(args[1:])
+        rest = args[1:]
+        if rest and rest[0] == "--model":
+            if len(rest) < 2:
+                print(USAGE)
+                raise SystemExit(1)
+            config = config.model_copy(update={"model": rest[1]})
+            rest = rest[2:]
+        question = " ".join(rest)
         if not question:
             print("请提供一个问题。")
             print("用法：config-cli ask '你的问题'")
@@ -119,5 +140,5 @@ def main() -> None:
         print(f"回答：{answer}")
     else:
         print(f"未知命令: {args[0]}")
-        print("用法：config-cli ask '你的问题'")
+        print(USAGE)
         raise SystemExit(1)
